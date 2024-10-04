@@ -1,0 +1,838 @@
+\documentclass{article}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{indentfirst}
+\usepackage{mathtools}
+\usepackage{multirow}
+\usepackage[round]{natbib}
+%\usepackage[square,sort,comma,numbers]{natbib}
+
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm]{geometry}
+\usepackage{titlesec}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}
+\newtheorem{proposition}{Proposition}
+% \newtheorem*{corollary}{Corollary}
+
+\DeclareMathOperator{\atan}{atan}
+\DeclareMathOperator{\Exp}{Exp}
+\DeclareMathOperator{\Log}{Log}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+
+% Define \mathpzc font lower case, \mathcal is for upper case
+\DeclareFontFamily{OT1}{pzc}{}
+\DeclareFontShape{OT1}{pzc}{m}{it}{<-> s * [1.10] pzcmi7t}{}
+\DeclareMathAlphabet{\mathpzc}{OT1}{pzc}{m}{it}
+
+\makeatletter
+\def\x{\@ifnextchar_{\xsub}{\mathpzc{x}}} % Default \x to \mathpzc{x}
+\def\xsub_#1{\mathpzc{x}_{\mkern4mu #1}}  % \x_{t} gives \mathpzc{x}_{\mkern4mu t}
+
+% Define a special case for \bar\x
+\def\bx{\bar{\mathpzc{x}}}
+\def\bxsub_#1{\bar{\mathpzc{x}}_{\mkern4mu #1}}
+\def\barx{\@ifnextchar_{\bxsub}{\bx}}
+
+% Define a special case for \check\x
+\def\cx{\check{\mathpzc{x}}}
+\def\cxsub_#1{\check{\mathpzc{x}}_{\mkern4mu #1}}
+\def\checkx{\@ifnextchar_{\cxsub}{\bx}}
+
+% Define a special case for \hat\x
+\def\hx{\hat{\mathpzc{x}}}
+\def\hxsub_#1{\hat{\mathpzc{x}}_{\mkern4mu #1}}
+\def\hatx{\@ifnextchar_{\hxsub}{\bx}}
+
+% Define a new epsilon for
+\def\mveps{\mathcal{\varepsilon}}
+
+\makeatother
+
+% This make the figure & table centering automatically
+\makeatletter
+\g@addto@macro\@floatboxreset\centering
+\makeatother
+
+\title{Error State Kalman Filter on Matrix Lie Groups}
+\author{Yi-Chen Zhang}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+% This article summarizes the results from \citet{barrau_invariant_2017,
+% barrau_invariant_2018}, \citet{arsenault_practical_2019}, and
+% \citet{sola_micro_2021}. Additionally, the notations used in these papers have
+% been unified in this work.
+
+\section{Introduction}
+\addcontentsline{toc}{subsection}{[put outline, related work, scope, and
+contribute here]}
+
+\section{Mathematical Prelimiaries}
+\subsection{Lie Groups Overview}
+\begin{definition}
+  \textit{(Right-operators)} Let $\mathcal{X}$, $\mathcal{Y}\in \mathcal{M}$ The
+  be elements in Lie group and $\prescript{\x}{}{\tau}\in
+  \mathcal{T}_{\x}\mathcal{M}$ be a local tangent vector. We define the
+  operator-pair:
+  \begin{align*}
+    \text{right-}\oplus: & \hspace{1ex}\mathcal{Y}=\mathcal{X}\oplus
+    \prescript{\x}{}{\bm{\tau}}=\mathcal{X}\circ\Exp(\prescript{\x}{}{\bm{\tau}})\\
+    \text{right-}\ominus: & \hspace{1ex} \prescript{\x}{}{\bm{\tau}} =
+    \mathcal{Y}\ominus\mathcal{X}=\Log(\mathcal{X}^{-1}\circ\mathcal{Y})
+  \end{align*}
+\end{definition}
+The above definition use a local tangent vector for ``addition'' and
+``subtraction''. We call this right-$\oplus$ and right-$\ominus$ because
+$\bm{\tau}$ appears in the right hand side expression of the composition. Since
+the matrix operation is generally non-commutable, we further define the left
+operators for the right counter-part. 
+\begin{definition}
+  \textit{(Left-operators)} Let $\mathcal{X}$, $\mathcal{Y}\in \mathcal{M}$ The
+  be elements in Lie group and $\prescript{\mveps}{}{\tau}\in
+  \mathcal{T}_{\mveps}\mathcal{M}$ be a global tangent vector. We define the
+  operator-pair:
+  \begin{align*}
+    \text{left-}\oplus: & \hspace{1ex}\mathcal{Y}=
+    \prescript{\mveps}{}{\bm{\tau}}\oplus\mathcal{X}=
+    \Exp(\prescript{\mveps}{}{\bm{\tau}})\circ\mathcal{X}\\
+    \text{left-}\ominus: & \hspace{1ex} \prescript{\mveps}{}{\bm{\tau}} =
+    \mathcal{Y}\ominus\mathcal{X}=\Log(\mathcal{Y}\circ\mathcal{X}^{-1})
+  \end{align*}
+\end{definition}
+
+% The other approach is from \citet{sola_micro_2021}, where they defines the error
+% on the tangent space and applying the error-state extended Kalman filter on the
+% Lie Group. To facilitate this, they introduce the concepts of right-plus and
+% right-minus operators as follows:
+\subsection{Jacobians on Lie Groups}
+[put useful Jacobian result from \citet{sola_micro_2021} here]
+
+\section{Error State Kalman Filter on Matrix Lie Groups}
+\subsection{Error State Kalman Filtering}
+Throughout this section, we use $\check{\x}$ to denote the predicted state and 
+$\hat{\x}$ to denote the corrected state. The discrete-time prediction step is
+given by:
+\begin{align}
+  \checkx_{t} & = f(\hatx_{t-1},\bm{u}_{t})\\
+  \check{\bm{\Sigma}}_{t} & = \bm{F}_{t}\hat{\bm{\Sigma}}_{t-1}\bm{F}_{t}^{T}
+  + \bm{W}_{t}\bm{Q}_{t}\bm{W}_{t}^{T}
+\end{align}
+The discrete-time Jacobians are derived in Sections
+\ref{sec:left-disc-time-pred} and \ref{sec:right-disc-time-pred} for left- and
+right-invariant errors, respectively.
+
+The correction step is performed when a measurement $\bm{y}_{t}$ becomes
+available. The left- and right-invariant measurement models are:
+\begin{align}
+  \label{eq:left_invariant_measurement}
+  \bm{y}_{t} &= \x_{t}\cdot \bm{b}+\bm{\delta}_{t}\\
+  \label{eq:right_invariant_measurement}
+  \bm{y}_{t} &= \x_{t}^{-1}\cdot \bm{b}+\bm{\delta}_{t},
+\end{align}
+where $\bm{b}$ is a known vector and $\bm{\delta}_{t}\sim N(\bm{0},\bm{R}_{t})$.
+Typically, a first-order Taylor series expansion of the measurement model is
+used to obtain the measurement model and noise Jacobians, $\bm{H}_{t}$ and
+$\bm{V}_{t}$. Here, we still apply the Taylor expansion, the difference is we
+are expanding on the Matrix Lie groups. The case for right- and left-form
+measurement models are covered in Seciton \ref{sec:left-disc-time-corr} and
+\ref{sec:right-disc-time-corr}, respectively.
+
+The Kalman gain at time $t$ is computed using
+\begin{equation}
+  \bm{K}_{t}=\check{\bm{\Sigma}}_{t}\bm{H}_{t}^{T}\left(\bm{H}_{t}
+    \check{\bm{\Sigma}}_{t}\bm{H}_{t}^{T}+
+    \bm{V}_{t}\bm{R}_{t}\bm{V}_{t}^{T}\right)^{-1}
+\end{equation}
+
+The covariance update is
+\begin{equation}
+  \hat{\bm{\Sigma}}_{t}=(\mathpzc{I}-\bm{K}_{t}\bm{H}_{t})\check{\bm{\Sigma}}_{t}
+  (\mathpzc{I}-\bm{K}_{t}\bm{H}_{t})^{T}+
+  \bm{K}_{t}\bm{V}_{t}\bm{R}_{t}\bm{V}_{t}^{T}\bm{K}_{t}^{T}
+\end{equation}
+
+\subsection{Right-form}
+The right-form of ESKF on matrix Lie group corresponds to the left-invariant
+EKF (LIEKF). For a left-invariant measurement model of the form
+\eqref{eq:left_invariant_measurement}, we have derived the prediction and
+correction steps.
+
+\subsubsection{Prediction}
+\label{sec:left-disc-time-pred} 
+Using Taylor expansion of $\x_{t-1}$ around $\barx_{t-1}$ and
+$\bm{\epsilon}_{t}$ around $\bm{0}$, we have:
+\begin{align*}
+  \x_{t} & = f(\x_{t-1},\bm{u}_{t}, \bm{\epsilon})\\
+  & \approx f(\barx_{t-1},\bm{u}_{t},\bm{0})\oplus
+  \left.\frac{\prescript{\x}{}{\partial}f}{\partial \x}\right|_{\x_{t-1}
+  = \barx_{t-1}}(\x_{t-1}\ominus\barx_{t-1})\oplus
+  \left.\frac{\prescript{\x}{}{\partial}f}
+    {\partial\bm{\epsilon}}\right|_{\bm{\epsilon}_{t}=
+  \bm{0}}(\bm{\epsilon}_{t}-\bm{0})\\
+  & = \barx_{t}\oplus\prescript{\x}{}{\bm{F}_{t}}(\x_{t-1}\ominus\barx_{t-1})
+  \oplus\prescript{\x}{}{\bm{W}_{t}}\bm{\epsilon}_{t}
+\end{align*}
+
+Let $\prescript{\x}{}{\bm{\xi}}=\x\ominus\barx=\Log(\barx^{-1}\circ\x).$ From
+this definition, we have $\x=\barx\Exp(\prescript{\x}{}{\bm{\xi}})$. We can now
+rewrite the earlier equation as:
+\[
+  \prescript{\x}{}{\bm{\xi}_{t}}=\prescript{\x}{}{\bm{F}_{t}}
+  \prescript{\x}{}{\bm{\xi}_{t-1}}+\prescript{\x}{}{\bm{W}_{t}}\bm{\epsilon}_{t}
+\]
+where the Jacobians are defined as follows:
+\begin{align*}
+  \prescript{\x}{}{\bm{F}}_{t} & = 
+  \left.\frac{\prescript{\x}{}{\partial}f}{\partial \x}\right|_{\x_{t-1}
+  =\barx_{t-1}}\\
+  & = \lim_{\x_{t-1}\rightarrow\barx_{t-1}}
+  \frac{f(\x_{t-1},\bm{u}_{t},\bm{0})\ominus f(\barx_{t-1},\bm{u}_{t},\bm{0})}
+  {\x_{t-1}\ominus\barx_{t-1}}\\
+  & = \lim_{\prescript{\x}{}{\bm{\xi}_{t-1}}\rightarrow \bm{0}}
+  \frac{f(\x_{t-1}\oplus\prescript{\x}{}{\bm{\xi}_{t-1}},\bm{u}_{t},\bm{0})
+  \ominus f(\x_{t-1},\bm{u}_{t},\bm{0})}{\prescript{\x}{}{\bm{\xi}_{t-1}}}\\
+  & = \frac{\prescript{\x}{}{D}f(\x_{t-1},\bm{u}_{t},\bm{0})}{D\x_{t-1}}\\
+  & = \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}
+\end{align*}
+and
+\begin{align*}
+  \prescript{\x}{}{\bm{W}}_{t} & =
+  \left.\frac{\prescript{\x}{}{\partial} f}{\partial \bm{\epsilon}}
+    \right|_{\bm{\epsilon}_{t}=\bm{0}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{f(\barx_{t-1},\bm{u}_{t},\bm{\epsilon}_{t})\ominus
+  f(\barx_{t-1},\bm{u}_{t},\bm{0})}{\bm{\epsilon}_{t}}\\
+  & = \prescript{\x}{}{\bm{J}}^{f(\barx_{t-1},\bm{u}_{t},\bm{\epsilon}_{t})}_{\bm{\epsilon}_{t}}
+\end{align*}
+
+\subsubsection{Correction}
+\label{sec:left-disc-time-corr} 
+Define the innovation $\bm{z}_{t}$ such that
+\begin{align*}
+  \bm{z}_{t} & = \barx_{t}^{-1}\cdot (\bm{y}_{t}-\bar{\bm{y}}_{t})\\
+  & = \barx_{t}^{-1}\cdot \bm{y}_{t}-\bm{b}
+\end{align*}
+Now let $h(\x_{t})=(\barx_{t}^{-1}\x_{t})\cdot \bm{b}$ and note that
+\begin{align*}
+  \barx_{t}^{-1} \cdot \bm{y}_{t}
+  & = \barx_{t}^{-1}(\x_{t} \cdot \bm{b}+\bm{\delta}_{t})\\
+  & = \barx_{t}^{-1}\x_{t} \cdot \bm{b}+\barx_{t}^{-1}\cdot \bm{\delta}_{t}\\
+  & = h(\barx_{t})
+  +\left.\frac{\partial h}{\partial\x}
+    \right|_{\x_{t}=\barx_{t}}(\x_{t}\ominus\barx_{t})
+    +\barx_{t}^{-1}\cdot\bm{\delta}_{t}\\
+  & = \bm{b} + \prescript{\x}{}{\bm{H}}_{t}\prescript{\x}{}{\bm{\xi}}_{t}
+    +\barx_{t}^{-1}\cdot
+  \bm{\delta}_{t}\\
+\end{align*}
+So, we can rewrite the innovation as
+\[
+  \bm{z}_{t} = \prescript{\x}{}{\bm{H}}_{t}{}^{\x}\bm{\xi}_{t}+\bm{V}_{t}\bm{\delta}_{t}\\
+\]
+where
+\[
+  \prescript{\x}{}{\bm{H}}_{t}=\left.\frac{\prescript{\x}{}{\partial}h}
+    {\partial\x}\right|_{\x_{t}=\barx_{t}}\\
+\]
+
+\subsection{Left-form}
+The left-form of ESKF on matrix Lie group corresponds to the right-invariant EKF
+(RIEKF). For a right-invariant measurement model of the form
+\eqref{eq:right_invariant_measurement}, we have derived the prediction and
+correction steps.
+\subsubsection{Prediction}
+\label{sec:right-disc-time-pred} 
+Next, using Taylor expansion of $\x_{t-1}$ around $\barx_{t-1}$ and
+$\bm{\epsilon}_{t}$ around $\bm{0}$, we have:
+\begin{align*}
+  \x_{t} & = f(\x_{t-1},\bm{u}_{t}, \bm{\epsilon})\\
+  & \approx \left.\frac{\prescript{\mveps}{}{\partial}f}
+    {\partial\bm{\epsilon}}\right|_{\bm{\epsilon}_{t}=
+  \bm{0}}(\bm{\epsilon}_{t}-\bm{0}) \oplus
+  \left.\frac{\prescript{\mveps}{}{\partial}f}{\partial \x}\right|_{\x_{t-1}
+  = \barx_{t-1}}(\x_{t-1}\ominus\barx_{t-1})\oplus
+  f(\barx_{t-1},\bm{u}_{t},\bm{0})\\
+  & = \prescript{\mveps}{}{\bm{W}_{t}}\bm{\epsilon}_{t}\oplus
+  \prescript{\mveps}{}{\bm{F}_{t}}(\x_{t-1}\ominus\barx_{t-1})\oplus\barx_{t}
+\end{align*}
+
+Let $\prescript{\mveps}{}{\bm{\xi}}=\x\ominus\barx=\Log(\x\circ\barx^{-1}).$ From
+this definition, we have $\x=\Exp(\prescript{\mveps}{}{\bm{\xi}})\barx$. We can
+now rewrite the earlier equation as:
+\[
+  \prescript{\mveps}{}{\bm{\xi}_{t}}=\prescript{\mveps}{}{\bm{F}_{t}}
+  \prescript{\mveps}{}{\bm{\xi}_{t-1}}+
+  \prescript{\mveps}{}{\bm{W}_{t}}\bm{\epsilon}_{t}
+\]
+where the Jacobians are defined as follows:
+\begin{align*}
+  \prescript{\mveps}{}{\bm{F}}_{t} & = 
+  \left.\frac{\prescript{\mveps}{}{\partial}f}{\partial \x}\right|_{\x_{t-1}
+  =\barx_{t-1}}\\
+  & = \lim_{\x_{t-1}\rightarrow\barx_{t-1}}
+  \frac{f(\x_{t-1},\bm{u}_{t},\bm{0})\ominus f(\barx_{t-1},\bm{u}_{t},\bm{0})}
+  {\x_{t-1}\ominus\barx_{t-1}}\\
+  & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t-1}}\rightarrow \bm{0}}
+  \frac{f(\prescript{\mveps}{}{\bm{\xi}_{t-1}\oplus\x_{t-1}},\bm{u}_{t},\bm{0})
+  \ominus f(\x_{t-1},\bm{u}_{t},\bm{0})}{\prescript{\mveps}{}{\bm{\xi}_{t-1}}}\\
+  & = \frac{\prescript{\mveps}{}{D}f(\x_{t-1},\bm{u}_{t},\bm{0})}{D\x_{t-1}}\\
+  & = \textbf{Ad}_{f(\x_{t-1},\bm{u}_{t},\bm{0})}
+  \prescript{\x}{}{\bm{J}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}_{\x_{t-1}}
+  \textbf{Ad}_{\x_{t-1}}^{-1}
+  %& = \prescript{\mveps}{}{\bm{J}}_{\x_{t-1}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}\\
+  %& = 
+\end{align*}
+and
+\begin{align*}
+  \prescript{\mveps}{}{\bm{W}}_{t} & =
+  \left.\frac{\prescript{\mveps}{}{\partial} f}{\partial \bm{\epsilon}}
+    \right|_{\bm{\epsilon}_{t}=\bm{0}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{f(\barx_{t-1},\bm{u}_{t},\bm{\epsilon}_{t})\ominus
+  f(\barx_{t-1},\bm{u}_{t},\bm{0})}{\bm{\epsilon}_{t}}\\
+  & = \prescript{\mveps}{}{\bm{J}}^{f(\barx_{t-1},\bm{u}_{t},\bm{\epsilon}_{t})}_{\bm{\epsilon}_{t}}
+\end{align*}
+
+\subsubsection{Correction}
+\label{sec:right-disc-time-corr} 
+Define the innovation $z_{t}$ such that
+\begin{align*}
+  \bm{z}_{t} & = \barx_{t} \cdot (\bm{y}_{t}-\bar{\bm{y}}_{t})\\
+  & = \barx_{t} \cdot \bm{y}_{t}-\bm{b}
+\end{align*}
+Now let $h(\x_{t})=(\barx_{t}\x_{t}^{-1}) \cdot \bm{b}$ and note that
+\begin{align*}
+  \barx_{t} \cdot \bm{y}_{t}
+  & = \barx_{t}(\x_{t}^{-1} \cdot \bm{b}+\bm{\delta}_{t})\\
+  & = \barx_{t}\x_{t}^{-1} \cdot \bm{b}+\barx_{t}\cdot \bm{\delta}_{t}\\
+  & = h(\barx_{t})+\left.\frac{\prescript{\mveps}{}{\partial}h}{\partial\x}
+    \right|_{\x_{t}=\barx_{t}}(\x_{t}\ominus\barx_{t})
+    +\barx_{t}\cdot\bm{\delta}_{t}\\
+    & = \bm{b} + \prescript{\mveps}{}{\bm{H}}_{t}\prescript{\mveps}{}{\bm{\xi}}_{t}+\barx_{t}\cdot
+  \bm{\delta}_{t}\\
+\end{align*}
+So, we can rewrite the innovation as
+\[
+  \bm{z}_{t} = \prescript{\mveps}{}{\bm{H}}_{t}{}^{\x}\bm{\xi}_{t}+\bm{V}_{t}\bm{\delta}_{t}\\
+\]
+where
+\[
+  \prescript{\mveps}{}{\bm{H}}_{t}=\left.\frac{\prescript{\mveps}{}{\partial}h}{\partial\x}\right|_{\x_{t}=\barx_{t}}\\
+\]
+
+\subsection{Mixed Left and Right}
+One can switch beteen the left and right error forms through the use of the
+adjoint map.
+
+\begin{align*}
+  \prescript{\x}{}{\bm{\xi}_{t}}
+  & = \Log\left(\barx_{t}\circ\x_{t}^{-1}\right)\\
+  & = \Log\left(\barx_{t}\Exp(\prescript{\mveps}{}{\bm{\xi}_{t}})\barx_{t}^{-1}\right)\\
+  & = \Log\left(\exp(\barx_{t}\prescript{\mveps}{}{\bm{\xi}_{t}^{\wedge}}\barx_{t}^{-1})\right)\\
+  & = \Log\left(\Exp(\textbf{Ad}_{\barx_{t}}\prescript{\mveps}{}{\bm{\xi}_{t}})\right)\\
+  & = \textbf{Ad}_{\barx_{t}}\prescript{\mveps}{}{\bm{\xi}_{t}}
+\end{align*}
+This transformation is exact, which means that we can easily switch between the
+covariance of the left and right invariant errors using
+\begin{equation}
+  \prescript{\x}{}{\bm{\Sigma}_{t}} = \textbf{Ad}_{\barx_{t}}
+  \prescript{\mveps}{}{\bm{\Sigma}_{t}}\textbf{Ad}_{\barx_{t}}^{T}
+\end{equation}
+
+\section{Simulation Experiment}
+\addcontentsline{toc}{subsection}{[Compare with other Kalman Filter families]}
+
+% \subsection{Example: $SE(2)$}
+% \subsubsection{System Modelling}
+% We consider the robot pose $\x$ in $SE(2)$ and the GPS measurement $y$ is in
+% $\mathbb{R}^{2}$
+% \[
+%   \x=\begin{bmatrix}
+%     \bm{R} & \bm{t}\\
+%     \bm{0}^{T} & 1
+%   \end{bmatrix}\in\text{SE}(2)
+% \]
+% The control signal $\bm{u}$ is in $\mathfrak{se}(2)$ and is corrupted by
+% additive Gaussian noise $\bm{\epsilon}$, which has a mean of $\bm{0}$ and a
+% covariance $\bm{Q}$. Upon receiving a control $\bm{u}$, the robot pose is
+% updated as follows:
+% \[
+% \x_{t}% & = f(\x_{t-1}, \bm{u}_{t},\bm{\epsilon}_{t})\\
+% = \x_{t-1}\Exp(\bm{u}_{t}+\bm{\epsilon}_{t}).
+% \]
+
+% \subsubsection{Right-form Derivation}
+% In order to derive a LIEKF, the exteroceptive measurement model most be
+% left-invariant. In this case, appropriate measurements are position
+% measurements, which could be from a GPS receiver.
+
+% The GPS measurement $\bm{y}$ is in Cartesian form for simplicity, and the noise
+% is denoted $\bm{\delta}$, which has a mean of $\bm{0}$ and a covariance of
+% $\bm{R}$.
+% \[
+% \bm{y}_{t} %& = h(\chi_{t}, b) + \mathbf{\delta}_{t}\\
+% = \x_{t} \cdot \bm{b}+\bm{\delta}_{t}
+% \]
+% where $\bm{b}=\bm{0}$ for rigid motion action in this case.
+
+% For predict step:
+
+% For $\prescript{\x}{}{\bm{F}}_{t}$:
+% \begin{align*}
+%   \prescript{\x}{}{\bm{F}}_{t} & = 
+%   \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}\\
+%   & = \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{\x_{t-1}\oplus\bm{u}_{t}}\\
+%   & = \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{\x_{t-1}\Exp(\bm{u}_{t})}\\
+%   & = \text{Ad}_{\Exp(\bm{u}_{t})}^{-1}
+% \end{align*}
+
+% For $\prescript{\x}{}{\bm{W}}_{t}$:
+% \begin{align*}
+%   \prescript{\x}{}{\bm{W}}_{t} & =
+%   \prescript{\x}{}{\bm{J}}^{f(\barx_{t-1},\bm{u}_{t},
+%   \bm{\epsilon}_{t})}_{\bm{\epsilon}_{t}}\\
+%   & = \prescript{\x}{}{\bm{J}}^{(\barx_{t-1}\oplus\bm{u}_{t})
+%   \oplus\bm{\epsilon}_{t}}_{\bm{\epsilon}_{t}}\\
+%   & = \prescript{\x}{}{\bm{J}}_{r}(\bm{\epsilon}_{t})\\
+%   & \approx \mathpzc{I}
+% \end{align*}
+
+% Therefore, the predicted state and error covariance are
+% \begin{align*}
+%   \checkx_{t} & = \barx_{t}=\barx_{t-1}\oplus \bm{u}_{t}\\
+%   \check{\bm{\Sigma}}_{t} & = \bm{F}_{t}\hat{\bm{\Sigma}}_{t-1}\bm{F}_{t}^{T}
+%   +\bm{W}_{t}\bm{Q}_{t}\bm{W}_{t}^{T}
+% \end{align*}
+
+% For update step:
+% \begin{align*}
+%   \bm{y}_{t} & = h(\x_{t}, \bm{b})+\bm{\delta}_{t},\hspace{1ex}\text{with~}
+%   \bm{b}=\bm{0}\\
+%   & = \x_{t}\cdot \bm{b}+ \bm{\delta}_{t}
+% \end{align*}
+
+% Now, define the innovation $z_{t}$ such that
+% \begin{align*}
+%   \bm{z}_{t} & = \barx_{t}^{-1}\cdot\left(\bm{y}_{t}-\bm{\bar{y}}_{t}\right)\\
+%   & = \barx_{t}^{-1}\x_{t}\cdot\bm{b}+\barx_{t}^{-1}\cdot\bm{\delta}_{t}-\bm{b}
+% \end{align*}
+
+% \begin{align*}
+%   \bm{H}_{t} & =
+%   \left.\frac{\partial h}{\partial\x}\right|_{\x_{t}=\barx_{t}}\\
+%   & = \lim_{\x_{t} \rightarrow \barx_{t}}\frac{h(\x_{t})-h(\barx_{t})}
+%   {\x_{t} \ominus \barx_{t}}\\
+%   & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+%   \frac{\Exp(\prescript{\x}{}{\bm{\xi}_{t}})\cdot\bm{b}-\bm{b}}
+%   {\prescript{\x}{}{\bm{\xi}_{t}}}\\
+%   & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+%   \frac{(\mathpzc{I}+\prescript{\x}{}{\bm{\xi}}_{t}^{\wedge})\cdot \bm{b}-\bm{b}}
+%   {\prescript{\x}{}{\bm{\xi}_{t}}}\\
+%   & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow\bm{0}}
+%   \frac{\phi^{\wedge}\bm{b}+\bm{\rho}}{\prescript{\x}{}{\bm{\xi}_{t}}}\\
+%   & = \begin{bmatrix}
+%     \left.\frac{\partial\phi^{\wedge}\bm{b}+\bm{\rho}}
+%       {\partial\bm{\rho}}\right|_{\bm{\rho}=\bm{0}} &
+%     \left.\frac{\partial\phi^{\wedge}\bm{b}+\bm{\rho}}
+%       {\partial\phi}\right|_{\phi=0}\end{bmatrix}\\
+%   & = \begin{bmatrix}
+%     \mathpzc{I} & \bm{0}
+%   \end{bmatrix}
+% \end{align*}
+% and $\bm{V}_{t}=\bar{\bm{R}}_{t}^{T}$.
+
+% Furthermore, we have $\Exp(\prescript{\x}{}{\bm{\xi}_{t}})=
+% \barx_{t}^{-1}\x_{t}$, which implies that
+% $\x_{t}=\barx_{t}\Exp(\prescript{\x}{}{\bm{\xi}_{t}})$. This suggest the update 
+% of $\x_{t}$ is
+% \[
+%   \hatx_{t}=\checkx_{t}\Exp(\bm{K}_{t}\bm{z}_{t}),
+% \]
+% where $\bm{K}_{t}=\check{\bm{\Sigma}}_{t}\bm{H}_{t}\bm{S}_{t}^{-1}$ and
+% $\bm{S}_{t}=\bm{H}_{t}\check{\bm{\Sigma}}_{t}\bm{H}_{t}^{T}
+% +\bm{V}_{t}\bm{R}_{t}\bm{V}_{t}^{T}$.
+
+% Thus, the updated state and error covariance are given by:
+% \begin{align}
+%   \hatx_{t} & = \checkx_{t}\Exp(\bm{K}_{t}\bm{z}_{t})\\
+%   \hat{\bm{\Sigma}}_{t} & =
+%   (\mathpzc{I}-\bm{K}_{t}\bm{H}_{t})\check{\bm{\Sigma}}_{t}
+% \end{align}
+
+% \subsubsection{Left-form Derivation}
+% To derive a RIEKF, the exteroceptive measurement model must be right-invariant.
+% Suitable measurements for this case include landmark observations in the body
+% frame, which can be obtained from sensors such as LiDAR or a camera.
+
+% The landmark measurements are of the range and bearing type, though they are put
+% in Cartesian form for simplicity. The noise $\bm{\delta}$ is zero mean Gaussian,
+% and is specified with a covariance matrix $\bm{R}$. We notice the rigid motion
+% action 
+% \[
+%   \bm{y}_{t} = h(\x, \bm{b}) = \x_{t}^{-1}\cdot \bm{b}+\bm{\delta}
+% \]
+% where $\bm{b}\in\mathbb{R}^{2}$ is the landmark position.
+
+% For predict step:
+
+% For $\prescript{\mveps}{}{\bm{F}}_{t}$:
+% \begin{align*}
+%   \prescript{\mveps}{}{\bm{F}}_{t} & =
+%   \textbf{Ad}_{f(\x_{t-1},\bm{u}_{t},\bm{0})}
+%   \prescript{\x}{}{\bm{J}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}_{\x_{t-1}}
+%   \textbf{Ad}_{\x_{t-1}}^{-1}\\
+%   & = \textbf{Ad}_{\x_{t-1}\Exp(\bm{u}_{t})}
+%   \textbf{Ad}^{-1}_{\Exp(\bm{u}_{t})}\textbf{Ad}_{\x_{t-1}}^{-1}\\
+%   & = \textbf{Ad}_{\x_{t-1}\Exp(\bm{u}_{t})}
+%   \textbf{Ad}^{-1}_{\x_{t-1}\Exp(\bm{u}_{t})}\\
+%   & = \mathpzc{I}
+% \end{align*}
+
+% \begin{align*}
+%   \prescript{\mveps}{}{\bm{W}}_{t} & =
+%   \left.\frac{\prescript{\mveps}{}{\partial} f}{\partial \bm{\epsilon}}
+%     \right|_{\bm{\epsilon}_{t}=\bm{0}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{f(\barx_{t-1},\bm{u}_{t},\bm{\epsilon}_{t})\ominus
+%   f(\barx_{t-1},\bm{u}_{t},\bm{0})}{\bm{\epsilon}_{t}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{\Log\left(\barx_{t-1}\Exp(\bm{u}_{t})\Exp(\bm{\epsilon}_{t})
+%   \left[\barx_{t-1}\Exp(\bm{u}_{t})\right]^{-1}\right)}{\bm{\epsilon}_{t}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{\Log\left(\barx_{t}\Exp(\bm{\epsilon}_{t})\barx_{t}^{-1}\right)}{\bm{\epsilon}_{t}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{\Log\left(\barx_{t}\exp(\bm{\epsilon}_{t}^{\wedge})\barx_{t}^{-1}\right)}{\bm{\epsilon}_{t}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{\Log\left(\exp(\barx_{t}\bm{\epsilon}_{t}^{\wedge}\barx_{t}^{-1})\right)}{\bm{\epsilon}_{t}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{\Log\left(\Exp(\textbf{Ad}_{\barx_{t}}\bm{\epsilon}_{t})\right)}{\bm{\epsilon}_{t}}\\
+%   & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+%   \frac{\textbf{Ad}_{\barx_{t}}\bm{\epsilon}_{t}}{\bm{\epsilon}_{t}}\\
+%   & = \frac{\partial\textbf{Ad}_{\barx_{t}}\bm{\epsilon}_{t}}{\partial\bm{\epsilon}_{t}}\\
+%   & = \textbf{Ad}_{\barx_{t}}
+% \end{align*}
+
+% Therefore, the predicted state and error covariance are
+% \begin{align*}
+%   \checkx_{t} & = \barx_{t}=\barx_{t-1}\oplus \bm{u}_{t}\\
+%   \check{\bm{\Sigma}}_{t} & = \bm{F}_{t}\hat{\bm{\Sigma}}_{t-1}\bm{F}_{t}^{T}
+%   +\bm{W}_{t}\bm{Q}_{t}\bm{W}_{t}^{T}
+% \end{align*}
+
+% For update step:
+% \begin{align*}
+%   \bm{y}_{t} & = h(\x_{t}, \bm{b})+\bm{\delta}_{t}\\
+%   & = \x_{t}^{-1} \cdot \bm{b}+ \bm{\delta}_{t}
+% \end{align*}
+
+% Now, define the innovation $z_{t}$ such that
+% \begin{align*}
+%   \bm{z}_{t} & = \barx_{t}\cdot\left(\bm{y}_{t}-\bm{\bar{y}}_{t}\right)\\
+%   & = \barx_{t}\x_{t}^{-1}\cdot\bm{b}+\barx_{t}\cdot\bm{\delta}_{t}-\bm{b}
+% \end{align*}
+
+% \begin{align*}
+%   \bm{H}_{t} & =
+%   \left.\frac{\partial h}{\partial\x}\right|_{\x_{t}=\barx_{t}}\\
+%   & = \lim_{\x_{t} \rightarrow \barx_{t}}\frac{h(\x_{t})-h(\barx_{t})}
+%   {\x_{t} \ominus \barx_{t}}\\
+%   & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+%   \frac{\Exp(-\prescript{\mveps}{}{\bm{\xi}_{t}})\cdot\bm{b}-\bm{b}}
+%   {\prescript{\x}{}{\bm{\xi}_{t}}}\\
+%   & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+%   \frac{(\mathpzc{I}-\prescript{\mveps}{}{\bm{\xi}}_{t}^{\wedge})\cdot\bm{b}-\bm{b}}
+%   {\prescript{\mveps}{}{\bm{\xi}_{t}}}\\
+%   & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow\bm{0}}
+%   \frac{-\phi^{\wedge}\bm{b}-\bm{\rho}}{\prescript{\x}{}{\bm{\xi}_{t}}}\\
+%   & = \begin{bmatrix}
+%     \left.\frac{\partial(-\phi^{\wedge}\bm{b}-\bm{\rho})}
+%       {\partial\bm{\rho}}\right|_{\bm{\rho}=\bm{0}} &
+%     \left.\frac{\partial(-\phi^{\wedge}\bm{b}-\bm{\rho})}
+%       {\partial\phi}\right|_{\phi=0}\end{bmatrix}\\
+%   & = \begin{bmatrix}
+%     -\mathpzc{I} & -[1]_{\times}\bm{b}
+%   \end{bmatrix}
+% \end{align*}
+% and $\bm{V}_{t}=\bar{\bm{R}}_{t}^{T}$.
+
+% Furthermore, we have $\Exp(\prescript{\mveps}{}{\bm{\xi}_{t}})=
+% \x_{t}\barx_{t}^{-1}$, which implies that
+% $\x_{t}=\Exp(\prescript{\mveps}{}{\bm{\xi}_{t}})\barx_{t}$. This suggest the update 
+% of $\x_{t}$ is
+% \[
+%   \hatx_{t}=\Exp(\bm{K}_{t}\bm{z}_{t})\checkx_{t},
+% \]
+% where $\bm{K}_{t}=\check{\bm{\Sigma}}_{t}\bm{H}_{t}\bm{S}_{t}^{-1}$ and
+% $\bm{S}_{t}=\bm{H}_{t}\check{\bm{\Sigma}}_{t}\bm{H}_{t}^{T}
+% +\bm{V}_{t}\bm{R}_{t}\bm{V}_{t}^{T}$.
+
+% Thus, the updated state and error covariance are given by:
+% \begin{align*}
+%   \hatx_{t} & = \Exp(\bm{K}_{t}\bm{z}_{t})\checkx_{t}\\
+%   \hat{\bm{\Sigma}}_{t} & =
+%   (\mathpzc{I}-\bm{K}_{t}\bm{H}_{t})\check{\bm{\Sigma}}_{t}
+% \end{align*}
+
+\subsection{Example: $SE(3)$}
+\subsubsection{System Modelling}
+We consider the robot pose $\x$ in $SE(3)$ and the GPS measurement $y$ is in
+$\mathbb{R}^{3}$
+\[
+  \x=\begin{bmatrix}
+    \bm{R} & \bm{t}\\
+    \bm{0}^{T} & 1
+  \end{bmatrix}\in\text{SE}(3)
+\]
+The control signal $\bm{u}$ is in $\mathfrak{se}(3)$:
+\[
+  \bm{u}=\begin{bmatrix}
+    \bm{\nu}\\
+    \bm{\omega}
+  \end{bmatrix}\in\mathfrak{se}(3)
+\]
+where $\bm{\nu}$ is the linear velocity and $\bm{\omega}$ is the angular
+velocity. We assume the control $\bm{u}$ is corrupted by additive Gaussian
+noise $\bm{\epsilon}$, which has a mean of $\bm{0}$ and a covariance $\bm{Q}$.
+Upon receiving a control $\bm{u}$, the robot pose is updated as follows:
+\[
+\x_{t}% & = f(\x_{t-1}, \bm{u}_{t},\bm{\epsilon}_{t})\\
+= \x_{t-1}\Exp(\bm{u}_{t}+\bm{\epsilon}_{t}).
+\]
+
+\subsubsection{Right-form Derivation}
+In order to derive a LIEKF, the exteroceptive measurement model most be
+left-invariant. In this case, appropriate measurements are position
+measurements, which could be from a GPS receiver.
+
+The GPS measurement $\bm{y}$ is in Cartesian form for simplicity, and the noise
+is denoted $\bm{\delta}$, which has a mean of $\bm{0}$ and a covariance of
+$\bm{R}$.
+\[
+\bm{y}_{t} %& = h(\chi_{t}, b) + \mathbf{\delta}_{t}\\
+= \x_{t} \cdot \bm{b}+\bm{\delta}_{t}
+\]
+where $\bm{b}=\bm{0}$ for rigid motion action in this case.
+
+For predict step:
+
+For $\prescript{\x}{}{\bm{F}}_{t}$:
+\begin{align*}
+  \prescript{\x}{}{\bm{F}}_{t} & = 
+  \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}\\
+  & = \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{\x_{t-1}\oplus\bm{u}_{t}}\\
+  & = \prescript{\x}{}{\bm{J}}_{\x_{t-1}}^{\x_{t-1}\Exp(\bm{u}_{t})}\\
+  & = \text{Ad}_{\Exp(\bm{u}_{t})}^{-1}
+\end{align*}
+
+For $\prescript{\x}{}{\bm{W}}_{t}$:
+\begin{align*}
+  \prescript{\x}{}{\bm{W}}_{t} & =
+  \prescript{\x}{}{\bm{J}}^{f(\barx_{t-1},\bm{u}_{t},
+  \bm{\epsilon}_{t})}_{\bm{\epsilon}_{t}}\\
+  & = \prescript{\x}{}{\bm{J}}^{(\barx_{t-1}\oplus\bm{u}_{t})
+  \oplus\bm{\epsilon}_{t}}_{\bm{\epsilon}_{t}}\\
+  & = \prescript{\x}{}{\bm{J}}_{r}(\bm{\epsilon}_{t})\\
+  & \approx \mathpzc{I}
+\end{align*}
+
+Therefore, the predicted state and error covariance are
+\begin{align*}
+  \checkx_{t} & = \barx_{t}=\barx_{t-1}\oplus \bm{u}_{t}\\
+  \check{\bm{\Sigma}}_{t} & = \bm{F}_{t}\hat{\bm{\Sigma}}_{t-1}\bm{F}_{t}^{T}
+  +\bm{W}_{t}\bm{Q}_{t}\bm{W}_{t}^{T}
+\end{align*}
+
+For update step:
+
+Define the innovation $z_{t}$ such that
+\begin{align*}
+  \bm{z}_{t} & = \barx_{t}^{-1}\cdot\left(\bm{y}_{t}-\bm{\bar{y}}_{t}\right)\\
+  & = \barx_{t}^{-1}\x_{t}\cdot\bm{b}+\barx_{t}^{-1}\cdot\bm{\delta}_{t}-\bm{b}
+\end{align*}
+
+\begin{align*}
+  \bm{H}_{t} & =
+  \left.\frac{\partial h}{\partial\x}\right|_{\x_{t}=\barx_{t}}\\
+  & = \lim_{\x_{t} \rightarrow \barx_{t}}\frac{h(\x_{t})-h(\barx_{t})}
+  {\x_{t} \ominus \barx_{t}}\\
+  & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+  \frac{\Exp(\prescript{\x}{}{\bm{\xi}_{t}})\cdot\bm{b}-\bm{b}}
+  {\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+  \frac{(\mathpzc{I}+\prescript{\x}{}{\bm{\xi}}_{t}^{\wedge})\cdot \bm{b}-\bm{b}}
+  {\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow\bm{0}}
+  \frac{\bm{\phi}^{\wedge}\bm{b}+\bm{\rho}}{\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \lim_{\prescript{\x}{}{\bm{\xi}_{t}}\rightarrow\bm{0}}
+  \frac{-\bm{b}^{\wedge}\bm{\phi}+\bm{\rho}}{\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \begin{bmatrix}
+    \left.\frac{\partial (-\bm{b}^{\wedge}\bm{\phi}+\bm{\rho})}
+      {\partial\bm{\rho}}\right|_{\bm{\rho}=\bm{0}} &
+    \left.\frac{\partial (-\bm{b}^{\wedge}\bm{\phi}+\bm{\rho})}
+      {\partial\bm{\phi}}\right|_{\bm{\phi}=\bm{0}}\end{bmatrix}\\
+  & = \begin{bmatrix}
+    \mathpzc{I} & -[\bm{b}]_{\times}
+  \end{bmatrix}\\
+  & = \begin{bmatrix}
+    \mathpzc{I} & \bm{0}
+  \end{bmatrix}
+\end{align*}
+and $\bm{V}_{t}=\bar{\bm{R}}_{t}^{T}$.
+
+Furthermore, we have $\Exp(\prescript{\x}{}{\bm{\xi}_{t}})=
+\barx_{t}^{-1}\x_{t}$, which implies that
+$\x_{t}=\barx_{t}\Exp(\prescript{\x}{}{\bm{\xi}_{t}})$. This suggest the update 
+of $\x_{t}$ is
+\[
+  \hatx_{t}=\checkx_{t}\Exp(\bm{K}_{t}\bm{z}_{t}),
+\]
+where $\bm{K}_{t}=\check{\bm{\Sigma}}_{t}\bm{H}_{t}\bm{S}_{t}^{-1}$ and
+$\bm{S}_{t}=\bm{H}_{t}\check{\bm{\Sigma}}_{t}\bm{H}_{t}^{T}
++\bm{V}_{t}\bm{R}_{t}\bm{V}_{t}^{T}$.
+
+Thus, the updated state and error covariance are given by:
+\begin{align}
+  \hatx_{t} & = \checkx_{t}\Exp(\bm{K}_{t}\bm{z}_{t})\\
+  \hat{\bm{\Sigma}}_{t} & =
+  (\mathpzc{I}-\bm{K}_{t}\bm{H}_{t})\check{\bm{\Sigma}}_{t}
+\end{align}
+
+\subsubsection{Left-form Derivation}
+To derive a RIEKF, the exteroceptive measurement model must be right-invariant.
+Suitable measurements for this case include landmark observations in the body
+frame, which can be obtained from sensors such as LiDAR or a camera.
+
+The landmark measurements are of the range and bearing type, though they are put
+in Cartesian form for simplicity. The noise $\bm{\delta}$ is zero mean Gaussian,
+and is specified with a covariance matrix $\bm{R}$. We notice the rigid motion
+action 
+\[
+  \bm{y}_{t} = \x_{t}^{-1}\cdot \bm{b}+\bm{\delta}
+\]
+where $\bm{b}\in\mathbb{R}^{3}$ is the landmark position.
+
+For predict step:
+
+For $\prescript{\mveps}{}{\bm{F}}_{t}$:
+\begin{align*}
+  \prescript{\mveps}{}{\bm{F}}_{t} & =
+  \textbf{Ad}_{f(\x_{t-1},\bm{u}_{t},\bm{0})}
+  \prescript{\x}{}{\bm{J}}^{f(\x_{t-1},\bm{u}_{t},\bm{0})}_{\x_{t-1}}
+  \textbf{Ad}_{\x_{t-1}}^{-1}\\
+  & = \textbf{Ad}_{\x_{t-1}\Exp(\bm{u}_{t})}
+  \textbf{Ad}^{-1}_{\Exp(\bm{u}_{t})}\textbf{Ad}_{\x_{t-1}}^{-1}\\
+  & = \textbf{Ad}_{\x_{t-1}\Exp(\bm{u}_{t})}
+  \textbf{Ad}^{-1}_{\x_{t-1}\Exp(\bm{u}_{t})}\\
+  & = \mathpzc{I}
+\end{align*}
+
+\begin{align*}
+  \prescript{\mveps}{}{\bm{W}}_{t} & =
+  \left.\frac{\prescript{\mveps}{}{\partial} f}{\partial \bm{\epsilon}}
+    \right|_{\bm{\epsilon}_{t}=\bm{0}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{f(\barx_{t-1},\bm{u}_{t},\bm{\epsilon}_{t})\ominus
+  f(\barx_{t-1},\bm{u}_{t},\bm{0})}{\bm{\epsilon}_{t}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{\Log\left(\barx_{t-1}\Exp(\bm{u}_{t})\Exp(\bm{\epsilon}_{t})
+  \left[\barx_{t-1}\Exp(\bm{u}_{t})\right]^{-1}\right)}{\bm{\epsilon}_{t}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{\Log\left(\barx_{t}\Exp(\bm{\epsilon}_{t})\barx_{t}^{-1}\right)}{\bm{\epsilon}_{t}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{\Log\left(\barx_{t}\exp(\bm{\epsilon}_{t}^{\wedge})\barx_{t}^{-1}\right)}{\bm{\epsilon}_{t}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{\Log\left(\exp(\barx_{t}\bm{\epsilon}_{t}^{\wedge}\barx_{t}^{-1})\right)}{\bm{\epsilon}_{t}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{\Log\left(\Exp(\textbf{Ad}_{\barx_{t}}\bm{\epsilon}_{t})\right)}{\bm{\epsilon}_{t}}\\
+  & = \lim_{\bm{\epsilon}_{t}\rightarrow \bm{0}}
+  \frac{\textbf{Ad}_{\barx_{t}}\bm{\epsilon}_{t}}{\bm{\epsilon}_{t}}\\
+  & = \frac{\partial\textbf{Ad}_{\barx_{t}}\bm{\epsilon}_{t}}{\partial\bm{\epsilon}_{t}}\\
+  & = \textbf{Ad}_{\barx_{t}}
+\end{align*}
+
+Therefore, the predicted state and error covariance are
+\begin{align*}
+  \checkx_{t} & = \barx_{t}=\barx_{t-1}\oplus \bm{u}_{t}\\
+  \check{\bm{\Sigma}}_{t} & = \bm{F}_{t}\hat{\bm{\Sigma}}_{t-1}\bm{F}_{t}^{T}
+  +\bm{W}_{t}\bm{Q}_{t}\bm{W}_{t}^{T}
+\end{align*}
+
+For update step:
+
+Define the innovation $z_{t}$ such that
+\begin{align*}
+  \bm{z}_{t} & = \barx_{t}\cdot\left(\bm{y}_{t}-\bm{\bar{y}}_{t}\right)\\
+  & = \barx_{t}\x_{t}^{-1}\cdot\bm{b}+\barx_{t}\cdot\bm{\delta}_{t}-\bm{b}
+\end{align*}
+
+\begin{align*}
+  \bm{H}_{t} & =
+  \left.\frac{\partial h}{\partial\x}\right|_{\x_{t}=\barx_{t}}\\
+  & = \lim_{\x_{t} \rightarrow \barx_{t}}\frac{h(\x_{t})-h(\barx_{t})}
+  {\x_{t} \ominus \barx_{t}}\\
+  & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+  \frac{\Exp(-\prescript{\mveps}{}{\bm{\xi}_{t}})\cdot\bm{b}-\bm{b}}
+  {\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow \bm{0}}
+  \frac{(\mathpzc{I}-\prescript{\mveps}{}{\bm{\xi}}_{t}^{\wedge})\cdot\bm{b}-\bm{b}}
+  {\prescript{\mveps}{}{\bm{\xi}_{t}}}\\
+  & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow\bm{0}}
+  \frac{-\bm{\phi}^{\wedge}\bm{b}-\bm{\rho}}{\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \lim_{\prescript{\mveps}{}{\bm{\xi}_{t}}\rightarrow\bm{0}}
+  \frac{\bm{b}^{\wedge}\bm{\phi}-\bm{\rho}}{\prescript{\x}{}{\bm{\xi}_{t}}}\\
+  & = \begin{bmatrix}
+    \left.\frac{\partial(\bm{b}^{\wedge}\bm{\phi}-\bm{\rho})}
+      {\partial\bm{\rho}}\right|_{\bm{\rho}=\bm{0}} &
+    \left.\frac{\partial(\bm{b}^{\wedge}\bm{\phi}-\bm{\rho})}
+      {\partial\bm{\phi}}\right|_{\bm{\phi}=\bm{0}}\end{bmatrix}\\
+  & = \begin{bmatrix}
+    -\mathpzc{I} & [\bm{b}]_{\times}
+  \end{bmatrix}
+\end{align*}
+and $\bm{V}_{t}=\bar{\bm{R}}_{t}^{T}$.
+
+Furthermore, we have $\Exp(\prescript{\mveps}{}{\bm{\xi}_{t}})=
+\x_{t}\barx_{t}^{-1}$, which implies that
+$\x_{t}=\Exp(\prescript{\mveps}{}{\bm{\xi}_{t}})\barx_{t}$. This suggest the update 
+of $\x_{t}$ is
+\[
+  \hatx_{t}=\Exp(\bm{K}_{t}\bm{z}_{t})\checkx_{t},
+\]
+where $\bm{K}_{t}=\check{\bm{\Sigma}}_{t}\bm{H}_{t}\bm{S}_{t}^{-1}$ and
+$\bm{S}_{t}=\bm{H}_{t}\check{\bm{\Sigma}}_{t}\bm{H}_{t}^{T}
++\bm{V}_{t}\bm{R}_{t}\bm{V}_{t}^{T}$.
+
+Thus, the updated state and error covariance are given by:
+\begin{align*}
+  \hatx_{t} & = \Exp(\bm{K}_{t}\bm{z}_{t})\checkx_{t}\\
+  \hat{\bm{\Sigma}}_{t} & =
+  (\mathpzc{I}-\bm{K}_{t}\bm{H}_{t})\check{\bm{\Sigma}}_{t}
+\end{align*}
+\subsection{Example: $SE_{2}(3)$}
+\subsection{Example: $SE_{k}(3)$}
+
+\section{Practical Implications of the ESKF on Matrix Lie Groups}
+\subsection{Localization for Autonomous Driving: $SE(3)$ or $SE_{2}(3)$?}
+\subsection{Drone Navigation?}
+
+\section{Conclusion}
+\section{Appendix}
+\addcontentsline{toc}{subsection}{[put $SE(3)$, $SE_{2}(3)$, and $SE_{k}(3)$
+property here]}
+\addcontentsline{toc}{subsection}{[put Jacobians derivation here]}
+
+\bibliographystyle{apalike}
+\bibliography{eskf_lie}
+
+\end{document}

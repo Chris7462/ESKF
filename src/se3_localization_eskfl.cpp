@@ -104,7 +104,8 @@ int main()
   // START CONFIGURATION
   //
   //
-  const int NUMBER_OF_LMKS_TO_MEASURE = 5;
+  const int NUMBER_OF_LMKS_TO_MEASURE = 3;
+  const Matrix6d I = Matrix6d::Identity();
 
   // Define the robot pose element and its covariance
   manif::SE3d X, X_simulation, X_unfiltered;
@@ -126,7 +127,7 @@ int main()
   Q = (u_sigmas * u_sigmas).matrix().asDiagonal();
 
   // Declare the Jacobians of the motion wrt robot and control
-  manif::SE3d::Jacobian J_x, J_u;
+  manif::SE3d::Jacobian F, W; // F = J_f_x, W = J_f_epsilon;
 
   // Define five landmarks in R^3
   Vector3d b0, b1, b2, b3, b4, b;
@@ -148,15 +149,14 @@ int main()
   R = (y_sigmas * y_sigmas).matrix().asDiagonal();
 
   // Declare the Jacobian of the measurements
-  Matrix<double, 3, 6> H; // H = J_e_x
+  Matrix<double, 3, 6> H; // H = J_h_x
+  Matrix3d V; // V = J_h_delta
 
   // Declare some temporaries
-  Vector3d e, z;  // expectation, innovation
-  Matrix3d E, Z;  // covariances of the above
-  Matrix<double, 6, 3>  K;  // Kalman gain
+  Vector3d z;  // innovation
+  Matrix3d S;  // covariances of the above
+  Matrix<double, 6, 3> K;  // Kalman gain
   manif::SE3Tangentd dx;  // optimal update step, or error-state
-  manif::SE3d::Jacobian J_xi_x; // Jacobian is typedef Matrix
-  Matrix<double, 3, 6> J_e_xi;  // Jacobian
 
   //
   //
@@ -179,8 +179,8 @@ int main()
   //
   //
 
-  // Make 10 steps. Measure up to three landmarks each time.
-  for (int t = 0; t < 10; ++t) {
+  // Make 20 steps. Measure up to three landmarks each time.
+  for (int t = 0; t < 20; ++t) {
     //// I. Simulation #########################################################
 
     /// simulate noise
@@ -213,10 +213,10 @@ int main()
     /// First we move - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     X = X + u_est;  // X * exp(u). We use right plus here, the Jacobians need to be calculated manually
-    J_x.setIdentity();  // J_x = F_{t}
-    J_u = X.adj();  // J_u = W_{t}
+    F.setIdentity();  // F = J_f_x
+    W = X.adj();  // W = J_f_epsilon
 
-    P = J_x * P * J_x.transpose() + J_u * Q * J_u.transpose();
+    P = F * P * F.transpose() + W * Q * W.transpose();
 
 
     /// Then we correct using the measurements of each lmk - - - - - - - - -
@@ -227,24 +227,27 @@ int main()
       // measurement
       y = measurements[i];  // lmk measurement, noisy
 
-      // expectation
-      e = X.inverse(J_xi_x).act(b, J_e_xi);           // note: e = R.tr * ( b - t ), for X = (R,t).
-      H = J_e_xi * J_xi_x;                            // note: H = J_e_x = J_e_xi * J_xi_x
-      E = H * P * H.transpose();
-
       // innovation
-      z = y - e;
-      Z = E + R;
+      z = X.act(y) - b; // z = X * y - X * ybar (the second term = b)
+
+      // Jacobians
+      H.topLeftCorner<3, 3>() = -Matrix3d::Identity();
+      H.topRightCorner<3, 3>() = manif::skew(b);
+      V = X.rotation();
+
+      // innovation covariance
+      S = H * P * H.transpose() + V * R * V.transpose();
 
       // Kalman gain
-      K = P * H.transpose() * Z.inverse();            // K = P * H.tr * ( H * P * H.tr + R).inv
+      K = P * H.transpose() * S.inverse();
 
       // Correction step
-      dx = K * z;                                     // dx is in the tangent space at X
+      dx = K * z; // dx is in the tangent space at X
 
       // Update
-      X = X + dx;                                     // overloaded X.rplus(dx) = X * exp(dx)
-      P = P - K * Z * K.transpose();
+      X = X.lplus(dx);  // overloaded X.lplus(dx) = exp(dx) * X
+      P = (I - K * H) * P * (I - K * H).transpose()
+           + K * V * R * V.transpose() * K.transpose();
     }
 
 

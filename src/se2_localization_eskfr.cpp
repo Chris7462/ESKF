@@ -199,6 +199,8 @@ int main()
     H.topLeftCorner<2, 2>() = Matrix2d::Identity();
     H.topRightCorner<2, 1>() = Vector2d::Zero();
     V = X.inverse().rotation();
+
+    // innovation covariance
     S = H * P * H.transpose() + V * R * V.transpose();
 
     // Kalman gain

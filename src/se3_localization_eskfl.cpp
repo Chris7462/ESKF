@@ -2,7 +2,7 @@
  * \file se3_localization_eskfl.cpp
  *
  *  Created on: Oct 10, 2024
- *     \author: Yi-Chen Zhang
+ *    \author: Yi-Chen Zhang
  *
  *  ----------------------------------------------------------------------------
  *  Demonstration example:
@@ -21,8 +21,8 @@
  *
  *  The robot pose X is in SE(3) and the landmark positions b_k in R^3,
  *
- *    X = |  R   t |              // position and orientation
- *        |  0   1 |
+ *    X = |  R   t  |              // position and orientation
+ *        |  0   1  |
  *
  *    b_k = (bx_k, by_k, bz_k)    // lmk coordinates in the world frame
  *
@@ -34,11 +34,11 @@
  *
  *  The control is corrupted by additive Gaussian noise u_noise, with covariance
  *
- *    Q = diagonal(sigma_x^2, sigma_y^2, sigma_z^2,
- *                 sigma_roll^2, sigma_pitch^2, sigma_yaw^2).
+ *    Q = diagonal(sigma_vx^2, sigma_vy^2, sigma_vz^2,
+ *                 sigma_wx^2, sigma_wy^2, sigma_wz^2).
  *
  *  This noise accounts for possible lateral and rotational slippage through a
- *  non-zero values of sigma_y, sigma_z, sigma_roll and sigma_pitch.
+ *  non-zero values of sigma_vy, sigma_vz, sigma_wx and sigma_wy.
  *
  *  At the arrival of a control u, the robot pose is updated with
  *
@@ -92,7 +92,6 @@ using std::endl;
 
 using namespace Eigen;
 
-using Array3d = Array<double, 3, 1>;
 using Array6d = Array<double, 6, 1>;
 using Vector6d = Matrix<double, 6, 1>;
 using Matrix6d = Matrix<double, 6, 6>;

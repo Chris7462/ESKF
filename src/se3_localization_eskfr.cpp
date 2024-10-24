@@ -7,14 +7,14 @@
  *  ---------------------------------------------------------------------------
  *  Demonstration example:
  *
- *  2D Robot localization based on position measurements (GPS-like)
+ *  3D Robot localization based on position measurements (GPS-like)
  *  using the (Left) Invariant Extended Kalman Filter method.
  *
  *  The following example corresponds to the simulation section in the ESKF on
  *  Matrix Lie Groups paper. Please refer to the paper for further details.
  *  ---------------------------------------------------------------------------
  *
- *  We consider a robot in the plane. The robot receives control actions in the
+ *  We consider a robot in 3D space. The robot receives control actions in the
  *  form of axial and angular velocities, and is able to measure its position
  *  using a GPS for instance.
  *

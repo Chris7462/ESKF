@@ -28,3 +28,11 @@ add_executable(se3_localization_eskfr
 target_include_directories(se3_localization_eskfr PUBLIC
   ${EIGEN3_INCLUDE_DIR}
   ${manif_INCLUDE_DIRS})
+
+# SE_2(3) ESKF mixed
+add_executable(se_2_3_localization_eskf
+  src/se_2_3_localization_eskf.cpp)
+
+target_include_directories(se_2_3_localization_eskf PUBLIC
+  ${EIGEN3_INCLUDE_DIR}
+  ${manif_INCLUDE_DIRS})

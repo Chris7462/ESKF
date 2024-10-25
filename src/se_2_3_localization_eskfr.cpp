@@ -1,5 +1,5 @@
 /**
- * \file se_2_3_localization.cpp
+ * \file se_2_3_localization_eskfr.cpp
  *
  *  Created on: October 23, 2024
  *    \author: Yi-Chen Zhang
@@ -8,8 +8,7 @@
  *  Demonstration example:
  *
  *  3D Robot localization based on position measurements (GPS-like) and
- *  velocity measurement using the ESKF on the matrix Lie group. This is the
- *  case where we have both left- and right-invariant observation.
+ *  velocity measurement using the ESKF on the matrix Lie group.
  *
  *  The following example corresponds to the simulation section in the ESKF on
  *  Matrix Lie Groups paper. Please refer to the paper for further details.
@@ -24,7 +23,7 @@
  *
  *  The robot extended pose X is in SE_2(3),
  *
- *    X = | R  v  p |   // orientation, position, and linear velocity
+ *    X = | R  v  p |   // orientation, linear velocity, and position
  *        |    1    |
  *        |       1 |
  *
@@ -128,20 +127,20 @@ int main()
   Array9d u_sigmas;
   Matrix9d Q;
 
-  u_sigmas << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0;
+  u_sigmas << 0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0;
            // roll, pitch, yaw, vx, vy, vz, x, y, z
   Q = (u_sigmas * u_sigmas).matrix().asDiagonal();
 
   // Declare the Jacobians of the motion wrt robot and control
   Matrix9d F, W;  // F = J_f_x and W = J_f_epsilon;
 
-//// Define the velocity measurement in R^3
-//Vector3d v, v_noise;
-//Array3d v_sigmas;
-//Matrix3d R_v;
+  // Define the velocity measurement in R^3
+  Vector3d v, v_noise;
+  Array3d v_sigmas;
+  Matrix3d R_v;
 
-//v_sigmas << 0.1, 0.1, 0.1;
-//R_v = (v_sigmas * v_sigmas).matrix().asDiagonal();
+  v_sigmas << 0.1, 0.1, 0.1;
+  R_v = (v_sigmas * v_sigmas).matrix().asDiagonal();
 
   // Define the gps measurements in R^3
   Vector3d y, y_noise;
@@ -204,11 +203,11 @@ int main()
     /// update expected IMU measurements
     alpha = const_alpha - X_simulation.block<3, 3>(0, 0).transpose() * g; // update expected IMU measurement after moving
 
-//  /// then we receive noisy velocity measurement - - - - - - - - - - - - - - - -
-//  v_noise = v_sigmas * Array3d::Random(); // simulate measurement noise
+    /// then we receive noisy velocity measurement - - - - - - - - - - - - - - - -
+    v_noise = v_sigmas * Array3d::Random(); // simulate measurement noise
 
-//  v = X_simulation.block<3, 3>(0, 0).transpose() * X_simulation.block<3, 1>(0, 3); // velocity measurement, before adding noise
-//  v = v + v_noise;  // velocity measurement, noisy, in body frame
+    v = X_simulation.block<3, 1>(0, 3); // velocity measurement, before adding noise
+    v = v + v_noise;  // velocity measurement, noisy, in world frame
 
     /// then we receive noisy gps measurement - - - - - - - - - - - - - - - -
     y_noise = y_sigmas * Array3d::Random(); // simulate measurement noise
@@ -249,11 +248,36 @@ int main()
 
     P = F * P * F.transpose() + W * Q * W.transpose();
 
+    /// Then we correct using the velocity measurement - - - - - - - - - - -
+    auto X_inv = X.inverse();
+
+    // innovation
+    z = X_inv.block<3, 3>(0, 0) * (v - X.block<3, 1>(0, 3));
+
+    // Left Jacobians
+    H.setZero();
+    H.block<3, 3>(0, 3) = Matrix3d::Identity();
+    V = X_inv.block<3, 3>(0, 0);
+
+    // innovation covariance
+    S = H * P * H .transpose() + V * R_v * V.transpose();
+
+    // Kalman gain
+    K = P * H.transpose() * S.inverse();
+
+    // Correction step
+    Vector9d dx_v = K * z;
+    Matrix5d xi_v = makeTwist(dx_v);
+
+    // Update
+    X = X * xi_v.exp();
+    P = (I - K * H) * P * (I - K * H).transpose()
+        + K * V * R_v * V.transpose() * K.transpose();
+
 
     /// Then we correct using the gps position - - - - - - - - - - - - - - -
 
     // innovation
-    auto X_inv = X.inverse();
     z = X_inv.block<3, 3>(0, 0) * y + X_inv.block<3, 1>(0, 4);
 
     // Left Jacobians

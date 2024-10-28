@@ -29,10 +29,16 @@ target_include_directories(se3_localization_eskfr PUBLIC
   ${EIGEN3_INCLUDE_DIR}
   ${manif_INCLUDE_DIRS})
 
-# SE_2(3) ESKF mixed
-add_executable(se_2_3_localization_eskf
-  src/se_2_3_localization_eskf.cpp)
+# SE_2(3) ESKF left form
+add_executable(se_2_3_localization_eskfl
+  src/se_2_3_localization_eskfl.cpp)
 
-target_include_directories(se_2_3_localization_eskf PUBLIC
-  ${EIGEN3_INCLUDE_DIR}
-  ${manif_INCLUDE_DIRS})
+target_include_directories(se_2_3_localization_eskfl PUBLIC
+  ${EIGEN3_INCLUDE_DIR})
+
+# SE_2(3) ESKF right form
+add_executable(se_2_3_localization_eskfr
+  src/se_2_3_localization_eskfr.cpp)
+
+target_include_directories(se_2_3_localization_eskfr PUBLIC
+  ${EIGEN3_INCLUDE_DIR})

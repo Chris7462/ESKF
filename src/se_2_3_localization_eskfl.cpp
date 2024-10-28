@@ -1,33 +1,33 @@
 /**
- * \file se_2_3_localization_eskfr.cpp
+ * \file se_2_3_localization_eskfl.cpp
  *
- *  Created on: October 23, 2024
+ *  Created on: October 28, 2024
  *    \author: Yi-Chen Zhang
  *
  *  ----------------------------------------------------------------------------
  *  Demonstration example:
  *
- *  3D Robot localization based on position measurements (GPS-like) and
- *  velocity measurement using the ESKF on the matrix Lie group.
+ *  3D Robot localization based on fixed landmarks using the ESKF on the Matrix
+ *  Lie Group of the left form, which is equivalent to LIEKF.
  *
  *  The following example corresponds to the simulation section in the ESKF on
  *  Matrix Lie Groups paper. Please refer to the paper for further details.
  *  ----------------------------------------------------------------------------
  *
- *  We consider a robot in 3D space. The robot is assumed to be mounted with an
- *  IMU whose measurements are fed as exogeneous inputs to the system. The
- *  robot is able to measure its position in the world frame using a GPS and
- *  its velocity in the body frame using a velocity sensor.
+ *  We consider a robot in 3D space surrounded by a small
+ *  number of landmarks. The robot receives control actions in the form of axial
+ *  and angular velocities, and is able to measure the location of the beacons
+ *  with respect to its own reference frame.
  *
  *  We assume in this example that the IMU frame coincides with the robot frame.
  *
- *  The robot extended pose X is in SE_2(3),
+ *  The robot extended pose X is in SE_2(3) and the landmark position b_k in R^3,
  *
  *    X = | R  v  p |   // orientation, linear velocity, and position
  *        |    1    |
  *        |       1 |
  *
- *    y_k is the GPS measurement in R^3,
+ *    b_k = (bx_k, by_k, bz_k)    // lmk coordinates in the world frame
  *
  *    alpha_k = (alphax_k, alphay_k, alphaz_k)  // linear accelerometer measurements in IMU frame
  *
@@ -89,6 +89,8 @@ Matrix3d gamma2(const Vector3d & phi);
 
 Matrix5d makeTwist(const Vector9d & u);
 
+Matrix9d adj(const Matrix5d & X);
+
 int main()
 {
   std::srand((unsigned int) time(0));
@@ -96,6 +98,7 @@ int main()
   // START CONFIGURATION
   //
   //
+  const int NUMBER_OF_LMKS_TO_MEASURE = 3;
   const Matrix9d I = Matrix9d::Identity();
 
   // Define the robot extended pose element and its covariance
@@ -134,21 +137,24 @@ int main()
   // Declare the Jacobians of the motion wrt robot and control
   Matrix9d F, W;  // F = J_f_x and W = J_f_epsilon;
 
-  // Define the velocity measurement in R^3
-  Vector3d v, v_noise;
-  Array3d v_sigmas;
-  Matrix3d R_v;
+  // Define five landmarks in R^3
+  Vector3d b0, b1, b2, b3, b4, b;
+  b0 << 2.0, 0.0, 0.0;
+  b1 << 3.0, -1.0, -1.0;
+  b2 << 2.0, -1.0, 1.0;
+  b3 << 2.0, 1.0, 1.0;
+  b4 << 2.0, 1.0, -1.0;
 
-  v_sigmas << 0.1, 0.1, 0.1;
-  R_v = (v_sigmas * v_sigmas).matrix().asDiagonal();
+  std::vector<Vector3d> landmarks {b0, b1, b2, b3, b4};
 
-  // Define the gps measurements in R^3
+  // Define the landmarks' measurements
   Vector3d y, y_noise;
   Array3d y_sigmas;
-  Matrix3d R_y;
+  Matrix3d R;
+  std::vector<Vector3d> measurements(landmarks.size());
 
-  y_sigmas << 0.1, 0.1, 0.1;
-  R_y = (y_sigmas * y_sigmas).matrix().asDiagonal();
+  y_sigmas << 0.01, 0.01, 0.01;
+  R = (y_sigmas * y_sigmas).matrix().asDiagonal();
 
   // Declare the Jacobian of the measurements wrt the robot pose
   Matrix<double, 3, 9> H; // H = J_e_x
@@ -186,7 +192,7 @@ int main()
   //
   //
 
-  // Make 10 steps. Measure one GPS position and one vehicle velocity each time.
+  // Make 20 steps. Measure up to three landmarks each time.
   for (double t = 0; t < 100; t += dt) {
     //// I. Simulation ###############################################################################
 
@@ -203,17 +209,18 @@ int main()
     /// update expected IMU measurements
     alpha = const_alpha - X_simulation.block<3, 3>(0, 0).transpose() * g; // update expected IMU measurement after moving
 
-    /// then we receive noisy velocity measurement - - - - - - - - - - - - - - - -
-    v_noise = v_sigmas * Array3d::Random(); // simulate measurement noise
+    /// then we measure all landmarks - - - - - - - - - - - - - - - - - - - -
+    for (std::size_t i = 0; i < landmarks.size(); ++i) {
+      b = landmarks[i]; // lmk coordinates in world frame
 
-    v = X_simulation.block<3, 1>(0, 3); // velocity measurement, before adding noise
-    v = v + v_noise;  // velocity measurement, noisy, in world frame
+      /// simulate noise
+      y_noise = y_sigmas * Array3d::Random(); // measurement noise
 
-    /// then we receive noisy gps measurement - - - - - - - - - - - - - - - -
-    y_noise = y_sigmas * Array3d::Random(); // simulate measurement noise
-
-    y = X_simulation.block<3, 1>(0, 4); // position measurement, before adding noise
-    y = y + y_noise;  // position measurement, noisy
+      auto X_sim_inv = X_simulation.inverse();
+      y = X_sim_inv.block<3, 3>(0, 0) * b + X_sim_inv.block<3, 1>(0, 4);  // landmark measurement, without noise
+      y = y + y_noise;  // landmark measurement, noisy
+      measurements[i] = y;  // store for the estimator just below
+    }
 
 
 
@@ -236,69 +243,48 @@ int main()
 
     // Prepare Jacobian of state-dependent control vector
     Matrix9d A = Matrix9d::Zero();
-    A.block<3, 3>(0, 0) = -skew(omega_noisy);
-    A.block<3, 3>(3, 0) = -skew(alpha_noisy);
-    A.block<3, 3>(3, 3) = -skew(omega_noisy);
+    A.block<3, 3>(3, 0) = skew(g);
     A.block<3, 3>(6, 3) = Matrix3d::Identity();
-    A.block<3, 3>(6, 6) = -skew(omega_noisy);
 
     // Left invariant Jacobians
     auto & F = (A * dt).exp();
-    W.setIdentity();
+    W = adj(X);
 
     P = F * P * F.transpose() + W * Q * W.transpose();
 
-    /// Then we correct using the velocity measurement - - - - - - - - - - -
-    auto X_inv = X.inverse();
 
-    // innovation
-    z = X_inv.block<3, 3>(0, 0) * (v - X.block<3, 1>(0, 3));
+    /// Then we correct using the measurements of each lmk - - - - - - - - -
+    for (int i = 0; i < NUMBER_OF_LMKS_TO_MEASURE; ++i) {
+      // landmark
+      b = landmarks[i]; // lmk coordinates in world frame
 
-    // Left Jacobians
-    H.setZero();
-    H.block<3, 3>(0, 3) = Matrix3d::Identity();
-    V = X_inv.block<3, 3>(0, 0);
+      // measurement
+      y = measurements[i];  // lmk measurement, noisy
 
-    // innovation covariance
-    S = H * P * H .transpose() + V * R_v * V.transpose();
+      // innovation
+      z = X.block<3, 3>(0, 0) * y + X.block<3, 1>(0, 4) - b; // z = X * y - X * ybar (the second term = b)
 
-    // Kalman gain
-    K = P * H.transpose() * S.inverse();
+      // Jacobians
+      H.setZero();
+      H.topLeftCorner<3, 3>() = skew(b);
+      H.topRightCorner<3, 3>() = -Matrix3d::Identity();
+      V = X.block<3, 3>(0, 0);
 
-    // Correction step
-    Vector9d dx_v = K * z;
-    Matrix5d xi_v = makeTwist(dx_v);
+      // innovation covariance
+      S = H * P * H.transpose() + V * R * V.transpose();
 
-    // Update
-    X = X * xi_v.exp();
-    P = (I - K * H) * P * (I - K * H).transpose()
-        + K * V * R_v * V.transpose() * K.transpose();
+      // Kalman gain
+      K = P * H.transpose() * S.inverse();
 
+      // Correction step
+      Vector9d dx = K * z;
+      Matrix5d xi = makeTwist(dx);
 
-    /// Then we correct using the gps position - - - - - - - - - - - - - - -
-
-    // innovation
-    z = X_inv.block<3, 3>(0, 0) * y + X_inv.block<3, 1>(0, 4);
-
-    // Left Jacobians
-    H.setZero();
-    H.topRightCorner<3, 3>() = Matrix3d::Identity();
-    V = X_inv.block<3, 3>(0, 0);
-
-    // innovation covariance
-    S = H * P * H .transpose() + V * R_y * V.transpose();
-
-    // Kalman gain
-    K = P * H.transpose() * S.inverse();
-
-    // Correction step
-    Vector9d dx = K * z;
-    Matrix5d xi = makeTwist(dx);
-
-    // Update
-    X = X * xi.exp();
-    P = (I - K * H) * P * (I - K * H).transpose()
-        + K * V * R_y * V.transpose() * K.transpose();
+      // Update
+      X = xi.exp() * X; // left plus
+      P = (I - K * H) * P * (I - K * H).transpose()
+          + K * V * R * V.transpose() * K.transpose();
+    }
 
 
 
@@ -398,4 +384,16 @@ Matrix5d makeTwist(const Vector9d & u)
   twist.block<3, 1>(0, 3) = u.block<3, 1>(3, 0);
   twist.block<3, 1>(0, 4) = u.block<3, 1>(6, 0);
   return twist;
+}
+
+Matrix9d adj(const Matrix5d & X)
+{
+  Matrix9d adj = Matrix9d::Zero();
+  adj.block<3, 3>(0, 0) = X.block<3, 3>(0, 0);
+  adj.block<3, 3>(3, 0) = skew(X.block<3, 1>(0, 3)) * X.block<3, 3>(0, 0);
+  adj.block<3, 3>(6, 0) = skew(X.block<3, 1>(0, 4)) * X.block<3, 3>(0, 0);
+  adj.block<3, 3>(3, 3) = X.block<3, 3>(0, 0);
+  adj.block<3, 3>(6, 6) = X.block<3, 3>(0, 0);
+
+  return adj;
 }
